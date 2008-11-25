@@ -145,13 +145,17 @@ def wait_for_instances(conf, res):
             print "All %s instances ready" % (len(ready))
             break
         join = None
+        # FIXME this is failing when > 1 nodes show up in running
+        # in the same loop cycle (nodes stay in running? and get
+        # fired twice?)
         for i in running:
             if ready:
                 join = ready[0].private_dns_name.split('.')[0]
                 # FIXME can parallelize remaining starts
             if ensure_dynomite_started(conf, i, join):
                 running.remove(i)
-                ready.append(i)
+                if i not in ready:
+                    ready.append(i)
         time.sleep(10)
 
 
