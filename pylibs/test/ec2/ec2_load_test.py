@@ -28,7 +28,11 @@ import boto
 import subprocess
 import time
 from optparse import OptionParser
+import cPickle as pickle
 
+# Path to erl_call binary. FIXME! There must
+# be a better way to do this.
+EC = '/usr/local/lib/erlang/lib/erl_interface-3.5.9/bin'
 
 def load_test(conf=None):
     if conf is None:
@@ -61,6 +65,65 @@ def start_ec2(conf):
     return res
 
 
+def start_load(conf, ec2):
+    for instance in ec2.instances:
+        remote(conf, instance, "cd /tmp/dynomite/pylibs; "
+               "PYTHONPATH=. ./tools/load_thrift.py "
+               "--log /tmp/stats.pickle --clients %s &" % conf.ec2_clients)
+        print "Load started on %s" % instance
+
+
+def wait(conf):
+    print "Running load on all instances for %s seconds" % conf.ec2_run_time
+    time.sleep(conf.ec2_run_time)
+
+
+def collect_stats(conf, ec2):
+    stats = {'collisions': 0,
+             'get': [],
+             'put': []}
+    for ix, instance in enumerate(ec2.instances):
+        stats_file = "/tmp/%s.stats" % ix
+        print "Collecting stats from %s into %s" % (instance, stats_file)
+        cmd = ['scp', '-C', '-i', conf.aws_ssh_key_path,
+               'root@%s:/tmp/stats.pickle' % instance.public_dns_name,
+               stats_file]
+        p = subprocess.Popen(cmd,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (out, err) = p.communicate()
+        if p.returncode != 0:
+            print "failed to collect stats from %s: %s/%s" % (instance,
+                                                              out, err)
+            continue
+        sf = open(stats_file, 'r')
+        batch = pickle.load(sf)
+        sf.close()
+        stats['collisions'] += batch['collisions']
+        stats['get'].extend(batch['get'])
+        stats['put'].extend(batch['put'])
+    return stats
+    
+
+def evaluate_stats(conf, stats):
+    g = stats['get'][:]
+    g.sort()
+    p = stats['put'][:]
+    p.sort()
+    gets = len(g)
+    puts = len(p)
+    print "gets: %d puts: %d collisions: %d" \
+          % (gets, puts, stats['collisions'])
+    print "get avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+        (sum(g) / float(gets)) * 1000,
+        (g[gets/2]) * 1000,
+        (g[int(gets * .999)-1]) * 1000)
+    print "put avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+        (sum(p) / float(puts)) * 1000,
+        (p[puts/2]) * 1000,
+        (p[int(puts * .999)-1]) * 1000)
+    # FIXME check assertions
+
+
 def wait_for_instances(conf, res):
     running = []
     ready = []    
@@ -73,7 +136,7 @@ def wait_for_instances(conf, res):
                 pending.append(i)
             elif i.state == 'running':
                 if i not in ready:
-                running.append(i)            
+                    running.append(i)            
             else:
                 print "Unexpected state for instance %s: %s" % (i, i.state)
         print "Waiting for instance startup: %s pending %s running %s ready" \
@@ -85,11 +148,12 @@ def wait_for_instances(conf, res):
         for i in running:
             if ready:
                 join = ready[0].private_dns_name.split('.')[0]
+                # FIXME can parallelize remaining starts
             if ensure_dynomite_started(conf, i, join):
                 running.remove(i)
                 ready.append(i)
         time.sleep(10)
-    
+
 
 def ensure_dynomite_started(conf, instance, join=None):
     dyn_dir = '/tmp/dynomite'
@@ -105,9 +169,7 @@ def ensure_dynomite_started(conf, instance, join=None):
         upload(conf, instance, dyn_dir)
             
     args = {
-        # Path to erl_call binary. FIXME! There must
-        # be a better way to do this.
-        'ec': '/usr/local/lib/erlang/lib/erl_interface-3.5.9/bin',
+        'ec': EC,
         'dyn_dir': dyn_dir,            
         'join': ''}
     if join is not None:
@@ -127,6 +189,9 @@ def ensure_dynomite_started(conf, instance, join=None):
 
 
 def upload(conf, instance, dyn_dir):
+    # FIXME this could be made more efficient by parallelizing it
+    # do it in a worker thread or something, have a building list
+    # and queue to push back done instances
     print "Uploading dynomite distribution to %s" % instance
     root = os.path.dirname(
         os.path.dirname(
@@ -136,6 +201,7 @@ def upload(conf, instance, dyn_dir):
     assert root.endswith('dynomite')
     cmd = ['rsync', '-avz', '-e', "ssh -i %s" % conf.aws_ssh_key_path,
            '--exclude', '*.beam', '--exclude', '.git', '--exclude', '.svn',
+           '--exclude', 'etest/log', '--exclude', '*.egg',
            '%s/' % root,
            'root@%s:%s' % (instance.public_dns_name, dyn_dir)]
     print ' '.join(cmd)
