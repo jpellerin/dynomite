@@ -21,6 +21,9 @@ EC2_GET_THRESHOLD       -- If 99.9% of gets are not faster than this # of
                            milliseconds, the test fails
 EC2_PUT_THRESHOLD       -- If 99.9% of puts are not faster than this # of
                            milliseconds, the test fails
+EC2_DYNOMITE_ARGS       -- Extra args to pass to dynomite start script
+EC2_DYNOMITE_STORAGE    -- Dynomite storage module to use
+EC2_LOAD_SCRIPT_ARGS    -- Extra args for load_thrift script
 """
 import os
 import sys
@@ -69,7 +72,8 @@ def start_load(conf, ec2):
     for instance in ec2.instances:
         remote(conf, instance, "cd /tmp/dynomite/pylibs; "
                "PYTHONPATH=. ./tools/load_thrift.py "
-               "--log /tmp/stats.pickle --clients %s &" % conf.ec2_clients)
+               "--log /tmp/stats.pickle --clients %s %s &"
+               % (conf.ec2_clients, conf.load_args))
         print "Load started on %s" % instance
 
 
@@ -175,14 +179,16 @@ def ensure_dynomite_started(conf, instance, join=None):
     args = {
         'ec': EC,
         'dyn_dir': dyn_dir,            
-        'join': ''}
+        'join': '',
+        'storage': conf.dynomite_storage,
+        'extra': conf.dynomite_args}
     if join is not None:
         print "Instance %s will join dynomite node at %s" % (instance, join)
         args['join'] = ' -j dynomite@%s' % join
                 
     cmd = "%(dyn_dir)s/bin/dynomite status %(ec)s|| "\
-          "%(dyn_dir)s/bin/dynomite start --storage mnesia_storage " \
-          "--data /tmp/dynomite_data --detach %(join)s" % args
+          "%(dyn_dir)s/bin/dynomite start --storage %(storage)s " \
+          "--data /tmp/dynomite_data --detach %(join)s %(extra)s" % args
     
     p = remote(conf, instance, cmd)
     (out, err) = p.communicate()
@@ -291,6 +297,20 @@ def configure(argv=None):
                       default=env.get('EC2_PUT_THRESHOLD', 300),
                       help='If 99.9% of puts are not faster than this # of '
                       'milliseconds, the test fails (default: 300)')
+    parser.add_option('--dynomite-storage',
+                      action='store', dest='dynomite_storage',
+                      default=env.get('EC2_DYNOMITE_STORAGE', 'fs_storage'),
+                      help='Dynomite storage module to use')
+    parser.add_option('--dynomite-args',
+                      action='store', dest='dynomite_args',
+                      default=env.get('EC2_DYNOMITE_ARGS', ''),
+                      help='Extra args to pass to dynomite start script '
+                      'on each node')
+    parser.add_option('--load-args',
+                      action='store', dest='load_args',
+                      default=env.get('EC2_LOAD_SCRIPT_ARGS', ''),
+                      help='Extra args to pass to load script '
+                      'on each node')
 
     options, junk = parser.parse_args(argv)
     required = (# ('aws_userid', '--aws-userid', 'AWS_USERID'),

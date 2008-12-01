@@ -99,9 +99,21 @@ init([Config, Options]) ->
                   permanent, 1000, worker, 
                   [dynomite_web]}]
         end,    
-    Children = Required ++ Optional,    
+    Profiler = prof_server(),
+    Children = Required ++ Optional ++ Profiler,    
     {ok,{{one_for_one,10,1}, Children}}.
 
 %%====================================================================
 %% Internal functions
 %%====================================================================
+-ifdef(PROF).
+prof_server() ->
+    [{profile_server,
+      {profile_server, start_link, [Config]},
+      permanent, 1000, worker,
+      [profile_server]}].
+-else.
+prof_server() ->
+    [].
+-endif.
+       

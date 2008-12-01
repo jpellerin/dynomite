@@ -14,6 +14,12 @@ Error in process <0.774.0> on node 'b5@localhost' with exit value: {{case_clause
   monitoring?
 
 
+- write erl load client, calls mediator directly via rpc, to exclude 
+  python/thrift part of load
+
+- do load tests w/dmerkle and syncing totally disabled
+
+
 ec2 baseline
 
 4 clients on 1 server, 4 nodes:
@@ -24,7 +30,7 @@ ec2 baseline
 get avg: 19.2921230.3ms mean: 7.6100830.3ms 99.9: 128.2091140.3ms
 put avg: 52.9174800.3ms mean: 44.9030400.3ms 99.9: 192.3902030.3ms
 
-19 clients on 1 server, 4 nodes:
+10 clients on 1 server, 4 nodes:
 
 [root@domU-12-31-38-00-A1-D8 pylibs]# PYTHONPATH=. ./tools/dbench_thrift.py -n 1000 -c 10
 . . . . . . . . . .

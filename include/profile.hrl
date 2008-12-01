@@ -1,6 +1,6 @@
 -ifdef(PROF).
--define(prof(Label),
-        dynomite_prof:call(Label, ?MODULE, ?LINE)).
+-define(prof(Key, Label),
+        profile_server:step(Key, Label, ?MODULE, ?LINE)).
 -else.
--define(prof(Label), true).
+-define(prof(Key, Label), true).
 -endif.

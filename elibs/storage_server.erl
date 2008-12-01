@@ -142,10 +142,14 @@ init({StorageModule,DbKey,Name,Min,Max,BlockSize}) ->
 %% @end 
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, State = #storage{module=Module,table=Table}) ->
+    ?prof(Key, get),
   Result = (catch Module:get(sanitize_key(Key), Table)),
+    ?prof(Key, get),
   case Result of
     {ok, {Context, Values}} -> 
-      stats_server:request(get, lists:foldl(fun(Bin, Acc) -> Acc + byte_size(Bin) end, 0, Values));
+          ?prof(Key, stats_update),
+      stats_server:request(get, lists:foldl(fun(Bin, Acc) -> Acc + byte_size(Bin) end, 0, Values)),
+          ?prof(Key, stats_update);
     _ -> ok
   end,
 	{reply, Result, State};
@@ -251,20 +255,20 @@ code_change(_OldVsn, State, _Extra) ->
 internal_put(Key, Context, Values, Tree, Table, Module, State) ->
     SKey = sanitize_key(Key),
     %% ?debugFmt("Internal put key ~p module ~p", [SKey, Module]),
-    ?prof(dmerkle_update),
+    ?prof(Key, dmerkle_update),
     UpdatedTree = dmerkle:update(SKey, Values, Tree),
-    ?prof(dmerkle_update),
+    ?prof(Key, dmerkle_update),
     %% ?debugMsg("Tree updated"),
-    ?prof(put),
+    ?prof(Key, put),
     case catch Module:put(SKey, Context, Values, Table) of
         {ok, ModifiedTable} ->
             %% ?debugMsg("Table modified"),
-            ?prof(put),
+            ?prof(Key, put),
             stats_server:request(put, lib_misc:byte_size(Values)),
             {reply, ok, State#storage{table=ModifiedTable,tree=UpdatedTree}};
         Failure -> 
             %% ?debugFmt("failure ~p", [Failure]),
-            ?prof(put),
+            ?prof(Key, put),
             {reply, Failure, State}
     end.
 

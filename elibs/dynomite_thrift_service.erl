@@ -12,6 +12,7 @@
 
 -include("config.hrl").
 -include("dynomite_types.hrl").
+-include("profile.hrl").
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -37,26 +38,34 @@ put(Key, ContextData, Data) when
   is_binary(Key),
   (ContextData =:= undefined orelse is_binary(ContextData)),
   is_binary(Data) ->
+    ?prof(Key, {start, put}),
     Context = if
                   ContextData =:= undefined -> [];
                   erlang:byte_size(ContextData) > 0 -> binary_to_term(ContextData);
                   true -> []
               end,
-    case mediator:put(binary_to_list(Key), Context, Data) of
-        {ok, N} -> N;
-        {failure, Reason} -> throw(#failureException{message = iolist_to_binary(Reason)})
-    end.
+    Response = case mediator:put(binary_to_list(Key), Context, Data) of
+                   {ok, N} -> N;
+                   {failure, Reason} -> throw(#failureException{message = iolist_to_binary(Reason)})
+               end,
+    ?prof(Key, {'end', put}),
+    Response.
                    
 
 get(Key) when is_binary(Key) ->
-    case mediator:get(binary_to_list(Key)) of
-        {ok, not_found} -> #getResult{results = []};
-        {ok, {Context, Values}} ->
-            #getResult{context = term_to_binary(Context),
-                       results = Values};
-        {failure, Error} ->
-            throw(#failureException{message = iolist_to_binary(Error)})
-    end.
+    ?prof(Key, {start, get}),
+    Response = case mediator:get(binary_to_list(Key)) of
+                   {ok, not_found} -> #getResult{results = []};
+                   {ok, {Context, Values}} ->
+                       #getResult{context = term_to_binary(Context),
+                                  results = Values};
+                   {failure, Error} ->
+                       throw(#failureException{message = iolist_to_binary(Error)})
+               end,
+    ?prof(Key, {'end', get}),
+    Response.
+    
+
 
 has(Key) when is_binary(Key) ->
     case mediator:has_key(binary_to_list(Key)) of
