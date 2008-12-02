@@ -170,9 +170,7 @@ def wait_for_instances(conf, ec2):
             print "All %s instances ready" % (len(ready))
             break
         join = None
-        for i in running.values():
-            print i, ready.keys(), client_ready.keys(), conf.separate_client, all_servers_ready(conf, ready)
-            
+        for i in running.values():            
             if i.id in ready or i.id in client_ready:
                 continue
             if ready:
