@@ -215,17 +215,29 @@ handle_call({replica_nodes, Node}, _From, State) ->
 handle_call({range, Partition}, _From, State) ->
   {reply, int_range(Partition, State#membership.config), State};
 	
-handle_call({nodes_for_partition, Partition}, _From, State) ->
-  {reply, int_nodes_for_partition(Partition, State), State};
+handle_call({nodes_for_partition, Partition}, From, State) ->
+  spawn_link(fun() ->
+                     gen_server:reply(From, int_nodes_for_partition(Partition, State))
+             end),
+  {noreply, State};
 	
-handle_call({nodes_for_key, Key}, _From, State) ->
-	{reply, int_nodes_for_key(Key, State), State};
+handle_call({nodes_for_key, Key}, From, State) ->
+  spawn_link(fun() ->
+                     gen_server:reply(From, int_nodes_for_key(Key, State))
+             end),
+  {noreply, State};
 	
-handle_call({partitions_for_node, Node, Option}, _From, State) ->
-  {reply, int_partitions_for_node(Node, State, Option), State};
+handle_call({partitions_for_node, Node, Option}, From, State) ->
+  spawn_link(fun() ->
+                     gen_server:reply(From, int_partitions_for_node(Node, State, Option))
+             end),
+  {noreply, State};
   
-handle_call({partition_for_key, Key}, _From, State) ->
-  {reply, int_partition_for_key(Key, State), State};
+handle_call({partition_for_key, Key}, From, State) ->
+  spawn_link(fun() ->
+                     gen_server:reply(From, int_partition_for_key(Key, State))
+             end),
+  {noreply, State};
 	
 handle_call(stop, _From, State) ->
   {stop, shutdown, ok, State}.
