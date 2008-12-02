@@ -4,7 +4,6 @@ environment variables can be set to control test behavior and set ec2
 connection parameters, in lieu of the command line options available
 when run directly:
 
-AWS_USERID              -- your amazon user id
 AWS_KEY                 -- your amazon key 
 AWS_SECRET_KEY          -- your amazon secret key
 AWS_SSH_KEY             -- your amazon ssh key name
@@ -21,9 +20,16 @@ EC2_GET_THRESHOLD       -- If 99.9% of gets are not faster than this # of
                            milliseconds, the test fails
 EC2_PUT_THRESHOLD       -- If 99.9% of puts are not faster than this # of
                            milliseconds, the test fails
+EC2_DYNOMITE_BUILD_DIR  -- Directory to upload to and build in, on each
+                           ec2 instance.
 EC2_DYNOMITE_ARGS       -- Extra args to pass to dynomite start script
 EC2_DYNOMITE_STORAGE    -- Dynomite storage module to use
 EC2_LOAD_SCRIPT_ARGS    -- Extra args for load_thrift script
+EC2_RAKE_ARGS           -- Extra args for rake (when building dynamo on each
+                           ec2 instance)
+EC2_SEPARATE_CLIENT     -- (flag) If true, run clients on separate instances
+                           from servers. Default is to run both client and
+                           server on same instance.
 """
 import os
 import sys
@@ -31,6 +37,7 @@ import boto
 import subprocess
 import time
 from optparse import OptionParser
+from random import choice
 import cPickle as pickle
 
 # Path to erl_call binary. FIXME! There must
@@ -62,19 +69,27 @@ def start_ec2(conf):
     conn = boto.connect_ec2(conf.aws_key, conf.aws_secret_key)
     print "Retrieving image", conf.ec2_ami
     ami = conn.get_image(conf.ec2_ami)
-    print "Starting %s %s instances" % (conf.ec2_instances, conf.ec2_type)
-    res = ami.run(conf.ec2_instances, conf.ec2_instances,
+    if conf.separate_client:
+        inst_count = conf.ec2_instances * 2
+    else:
+        inst_count = conf.ec2_instances
+    print "Starting %s %s instances" % (inst_count, conf.ec2_type)
+    res = ami.run(inst_count, inst_count,
                   key_name=conf.aws_ssh_key, instance_type=conf.ec2_type)
     return res
 
 
 def start_load(conf, ec2):
-    for instance in ec2.instances:
-        remote(conf, instance, "cd /tmp/dynomite/pylibs; "
+    if conf.separate_client:
+        host = '--host %s' % pick_host(ec2.instances)
+    else:
+        host = ''    
+    for _, instance in enumerate_clients(conf, ec2.instances):
+        remote(conf, instance, "cd %s/pylibs; "
                "PYTHONPATH=. ./tools/load_thrift.py "
-               "--log /tmp/stats.pickle --clients %s %s &"
-               % (conf.ec2_clients, conf.load_args))
-        print "Load started on %s" % instance
+               "--log /tmp/stats.pickle --clients %s %s %s &"
+               % (conf.dyn_dir, conf.ec2_clients, host, conf.load_args))
+        print "Load started on %s %s" % (instance, host)
 
 
 def wait(conf):
@@ -86,7 +101,7 @@ def collect_stats(conf, ec2):
     stats = {'collisions': 0,
              'get': [],
              'put': []}
-    for ix, instance in enumerate(ec2.instances):
+    for ix, instance in enumerate_clients(conf, ec2.instances):
         stats_file = "/tmp/%s.stats" % ix
         print "Collecting stats from %s into %s" % (instance, stats_file)
         cmd = ['scp', '-C', '-i', conf.aws_ssh_key_path,
@@ -128,57 +143,58 @@ def evaluate_stats(conf, stats):
     # FIXME check assertions
 
 
-def wait_for_instances(conf, res):
-    running = []
-    ready = []    
+def wait_for_instances(conf, ec2):
+    ready = {}
+    client_ready = {}
     while True:
         pending = []
-        for i in res.instances:
+        running = {}
+        for i in ec2.instances:
             if i.state == 'pending':
                 i.update()
             if i.state == 'pending':
                 pending.append(i)
             elif i.state == 'running':
-                if i not in ready:
-                    running.append(i)            
+                running[i.id] = i
             else:
                 print "Unexpected state for instance %s: %s" % (i, i.state)
-        print "Waiting for instance startup: %s pending %s running %s ready" \
-              % (len(pending), len(running), len(ready))
-        if len(ready) == conf.ec2_instances:
+        if conf.separate_client:
+            print "Waiting for instance startup: " \
+                  "%s pending %s running %s ready %s client ready" \
+                  % (len(pending), len(running), len(ready), len(client_ready))
+        else:
+            print "Waiting for instance startup: " \
+                  "%s pending %s running %s ready" \
+                  % (len(pending), len(running), len(ready))
+        if all_ready(conf, ec2, ready, client_ready):
             print "All %s instances ready" % (len(ready))
             break
         join = None
-        # FIXME this is failing when > 1 nodes show up in running
-        # in the same loop cycle (nodes stay in running? and get
-        # fired twice?)
-        for i in running:
+        for i in running.values():
+            print i, ready.keys(), client_ready.keys(), conf.separate_client, all_servers_ready(conf, ready)
+            
+            if i.id in ready or i.id in client_ready:
+                continue
             if ready:
-                join = ready[0].private_dns_name.split('.')[0]
+                join = ready.values()[0].private_dns_name.split('.')[0]
                 # FIXME can parallelize remaining starts
-            if ensure_dynomite_started(conf, i, join):
-                running.remove(i)
-                if i not in ready:
-                    ready.append(i)
+            if conf.separate_client and all_servers_ready(conf, ready):
+                print "Servers are ready, loading %s clients" \
+                      % conf.ec2_instances
+                if ensure_uploaded(conf, i, make=False):
+                    client_ready[i.id] = i
+                    i.client = True
+            elif ensure_dynomite_started(conf, i, join):
+                ready[i.id] = i
         time.sleep(10)
 
 
 def ensure_dynomite_started(conf, instance, join=None):
-    dyn_dir = '/tmp/dynomite'
-
-    cmd = "ls %s" % dyn_dir
-    p = remote(conf, instance, cmd)
-    (out, err) = p.communicate()
-    if p.returncode != 0:
-        if 'Connection refused' in err:
-            print "%s sshd not ready" % instance
-            return False
-        print out, err
-        upload(conf, instance, dyn_dir)
-            
+    if not ensure_uploaded(conf, instance):
+        return False
     args = {
         'ec': EC,
-        'dyn_dir': dyn_dir,            
+        'dyn_dir': conf.dyn_dir,            
         'join': '',
         'storage': conf.dynomite_storage,
         'extra': conf.dynomite_args}
@@ -198,7 +214,20 @@ def ensure_dynomite_started(conf, instance, join=None):
     return True
 
 
-def upload(conf, instance, dyn_dir):
+def ensure_uploaded(conf, instance, make=True):    
+    cmd = "ls %s" % conf.dyn_dir
+    p = remote(conf, instance, cmd)
+    (out, err) = p.communicate()
+    if p.returncode != 0:
+        if 'Connection refused' in err:
+            print "%s sshd not ready" % instance
+            return False
+        print out, err
+        return upload(conf, instance, make=make)
+    return True
+        
+
+def upload(conf, instance, make=True):
     # FIXME this could be made more efficient by parallelizing it
     # do it in a worker thread or something, have a building list
     # and queue to push back done instances
@@ -213,7 +242,7 @@ def upload(conf, instance, dyn_dir):
            '--exclude', '*.beam', '--exclude', '.git', '--exclude', '.svn',
            '--exclude', 'etest/log', '--exclude', '*.egg',
            '%s/' % root,
-           'root@%s:%s' % (instance.public_dns_name, dyn_dir)]
+           'root@%s:%s' % (instance.public_dns_name, conf.dyn_dir)]
     print ' '.join(cmd)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     (out, err) = p.communicate()
@@ -223,11 +252,14 @@ def upload(conf, instance, dyn_dir):
         print out
         print err
         raise Exception("Upload failed")
-    print "Building dynomite on %s" % instance
-    r = remote(conf, instance, 'cd %s && rake %s' % (dyn_dir, conf.rake_args))
-    (out, err) = r.communicate()
-    if r.returncode != 0:
-        raise Exception("rake failed: %s/%s" % (out, err))
+    if make:
+        print "Building dynomite on %s" % instance
+        r = remote(conf, instance,
+                   'cd %s && rake %s' % (conf.dyn_dir, conf.rake_args))
+        (out, err) = r.communicate()
+        if r.returncode != 0:
+            raise Exception("rake failed: %s/%s" % (out, err))
+        return True
 
 
 def remote(conf, instance, cmd):
@@ -246,10 +278,6 @@ def configure(argv=None):
 
     env = os.environ
     parser = OptionParser()
-    parser.add_option('--aws-userid', '--userid',
-                      action='store', dest='aws_userid',
-                      default=env.get('AWS_USERID', None),
-                      help="AWS user id (without dashes)")
     parser.add_option('--aws-key', '--key',
                       action='store', dest='aws_key',
                       default=env.get('AWS_KEY', None),
@@ -297,6 +325,12 @@ def configure(argv=None):
                       default=env.get('EC2_PUT_THRESHOLD', 300),
                       help='If 99.9% of puts are not faster than this # of '
                       'milliseconds, the test fails (default: 300)')
+    parser.add_option('--dynomite-build-dir', '--dynomite-dir',
+                      action='store', dest='dyn_dir',
+                      default=env.get('EC2_DYNOMITE_BUILD_DIR',
+                                      '/tmp/dynomite'),
+                      help='Directory to upload to and build in, on each '
+                      'ec2 instance')
     parser.add_option('--dynomite-storage',
                       action='store', dest='dynomite_storage',
                       default=env.get('EC2_DYNOMITE_STORAGE', 'fs_storage'),
@@ -316,11 +350,13 @@ def configure(argv=None):
                       default=env.get('EC2_RAKE_ARGS', ''),
                       help='Extra args to pass to rake when building '
                       'dynomite on each node')
+    parser.add_option('--separate-client',
+                      action='store_true', dest='separate_client',
+                      default=boolean(env.get('EC2_SEPARATE_CLIENT', False)),
+                      help="Run clients on separate instances from servers")
     
-
     options, junk = parser.parse_args(argv)
-    required = (# ('aws_userid', '--aws-userid', 'AWS_USERID'),
-                ('aws_key', '--aws-key', 'AWS_KEY'),
+    required = (('aws_key', '--aws-key', 'AWS_KEY'),
                 ('aws_secret_key', '--aws-secret-key', 'AWS_SECRET_KEY'),
                 ('aws_ssh_key', '--aws-ssh-key', 'AWS_SSH_KEY'),
                 ('aws_ssh_key_path', '--aws-ssh-key-path', 'AWS_SSH_KEY_PATH'),
@@ -330,7 +366,45 @@ def configure(argv=None):
             parser.error("%s (%s) is required" % (oname, ename))
 
     return options
-    
+
+
+def all_ready(conf, ec2, ready, client_ready):
+    if conf.separate_client:
+        for instance in ec2.instances:
+            if not instance.id in ready and not instance.id in client_ready:
+                return False
+    else:
+        for instance in ec2.instances:
+            if not instance.id in ready:
+                return False
+    return True
+
+
+def all_servers_ready(conf, ready):
+    return len(ready.keys()) == conf.ec2_instances
+
+
+def boolean(val):
+    if isinstance(val, basestring):
+        return val.upper() in ['1', 'T', 'Y', 'TRUE', 'YES']
+    return bool(val)
+
+
+def enumerate_clients(conf, instances):
+    if not conf.separate_client:
+        for ix, instance in enumerate(instances):
+            yield ix, instance
+    ix = 0
+    for instance in instances:
+        if getattr(instance, 'client', False):
+            yield ix, instance
+            ix += 1
+
+
+def pick_host(instances):
+    servers = [i for i in instances if not getattr(i, 'client', False)]
+    return choice(servers).private_dns_name
+
 
 if __name__ == '__main__':
     main()
