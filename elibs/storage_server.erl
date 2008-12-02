@@ -253,26 +253,6 @@ code_change(_OldVsn, State, _Extra) ->
 %%--------------------------------------------------------------------
 
 internal_put(Key, Context, Values, Tree, Table, Module, State) ->
-<<<<<<< HEAD:elibs/storage_server.erl
-    SKey = sanitize_key(Key),
-    %% ?debugFmt("Internal put key ~p module ~p", [SKey, Module]),
-    ?prof(Key, dmerkle_update),
-    UpdatedTree = dmerkle:update(SKey, Values, Tree),
-    ?prof(Key, dmerkle_update),
-    %% ?debugMsg("Tree updated"),
-    ?prof(Key, put),
-    case catch Module:put(SKey, Context, Values, Table) of
-        {ok, ModifiedTable} ->
-            %% ?debugMsg("Table modified"),
-            ?prof(Key, put),
-            stats_server:request(put, lib_misc:byte_size(Values)),
-            {reply, ok, State#storage{table=ModifiedTable,tree=UpdatedTree}};
-        Failure -> 
-            %% ?debugFmt("failure ~p", [Failure]),
-            ?prof(Key, put),
-            {reply, Failure, State}
-    end.
-=======
   TreeFun = fun() -> dmerkle:update(Key, Values, Tree) end,
   TableFun = fun() -> Module:put(sanitize_key(Key), Context, Values, Table) end,
   [UpdatedTree, TableResult] = lib_misc:pmap(fun(F) -> F() end, [TreeFun, TableFun], 2),
@@ -282,7 +262,6 @@ internal_put(Key, Context, Values, Tree, Table, Module, State) ->
       {reply, ok, State#storage{table=ModifiedTable,tree=UpdatedTree}};
     Failure -> {reply, Failure, State}
   end.
->>>>>>> 48292ffb9ef8fe3102b81c056537a5801af56afd:elibs/storage_server.erl
 
 sanitize_key(Key) when is_atom(Key) -> atom_to_list(Key);
 sanitize_key(Key) when is_binary(Key) -> binary_to_list(Key);
