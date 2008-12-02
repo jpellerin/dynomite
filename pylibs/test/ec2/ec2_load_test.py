@@ -117,11 +117,11 @@ def evaluate_stats(conf, stats):
     puts = len(p)
     print "gets: %d puts: %d collisions: %d" \
           % (gets, puts, stats['collisions'])
-    print "get avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+    print "get avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(g) / float(gets)) * 1000,
         (g[gets/2]) * 1000,
         (g[int(gets * .999)-1]) * 1000)
-    print "put avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+    print "put avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(p) / float(puts)) * 1000,
         (p[puts/2]) * 1000,
         (p[int(puts * .999)-1]) * 1000)
@@ -224,7 +224,7 @@ def upload(conf, instance, dyn_dir):
         print err
         raise Exception("Upload failed")
     print "Building dynomite on %s" % instance
-    r = remote(conf, instance, 'cd %s && rake' % dyn_dir)
+    r = remote(conf, instance, 'cd %s && rake %s' % (dyn_dir, conf.rake_args))
     (out, err) = r.communicate()
     if r.returncode != 0:
         raise Exception("rake failed: %s/%s" % (out, err))
@@ -311,6 +311,12 @@ def configure(argv=None):
                       default=env.get('EC2_LOAD_SCRIPT_ARGS', ''),
                       help='Extra args to pass to load script '
                       'on each node')
+    parser.add_option('--rake-args',
+                      action='store', dest='rake_args',
+                      default=env.get('EC2_RAKE_ARGS', ''),
+                      help='Extra args to pass to rake when building '
+                      'dynomite on each node')
+    
 
     options, junk = parser.parse_args(argv)
     required = (# ('aws_userid', '--aws-userid', 'AWS_USERID'),
