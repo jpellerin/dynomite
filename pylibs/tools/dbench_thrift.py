@@ -44,11 +44,11 @@ def main():
     g.sort()
     p = results['put']
     p.sort()
-    print "get avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+    print "get avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(g) / float(len(g))) * 1000,
         (g[len(g)/2]) * 1000,
         (g[int(len(g) * .999) -1]) * 1000)
-    print "put avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+    print "put avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(p) / float(len(p))) * 1000,
         (p[len(p)/2]) * 1000,
         (p[int(len(p) * .999) -1]) * 1000)

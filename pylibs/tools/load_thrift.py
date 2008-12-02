@@ -61,11 +61,11 @@ def main():
         if verbose:
             print "gets: %d puts: %d collisions: %d" \
                   % (gets, puts, stats['collisions'])
-            print "get avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+            print "get avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
                 (sum(g) / float(gets)) * 1000,
                 (g[gets/2]) * 1000,
                 (g[int(gets * .999)-1]) * 1000)
-            print "put avg: %f0.3ms mean: %f0.3ms 99.9: %f0.3ms" % (
+            print "put avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
                 (sum(p) / float(puts)) * 1000,
                 (p[puts/2]) * 1000,
                 (p[int(puts * .999)-1]) * 1000)
