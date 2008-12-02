@@ -26,7 +26,6 @@
 -include("etest/storage_server_test.erl").
 -endif.
 
--include("profile.hrl").
 
 %%====================================================================
 %% API
@@ -142,14 +141,10 @@ init({StorageModule,DbKey,Name,Min,Max,BlockSize}) ->
 %% @end 
 %%--------------------------------------------------------------------
 handle_call({get, Key}, _From, State = #storage{module=Module,table=Table}) ->
-    ?prof(Key, get),
   Result = (catch Module:get(sanitize_key(Key), Table)),
-    ?prof(Key, get),
   case Result of
     {ok, {Context, Values}} -> 
-          ?prof(Key, stats_update),
-      stats_server:request(get, lists:foldl(fun(Bin, Acc) -> Acc + byte_size(Bin) end, 0, Values)),
-          ?prof(Key, stats_update);
+      stats_server:request(get, lists:foldl(fun(Bin, Acc) -> Acc + byte_size(Bin) end, 0, Values));
     _ -> ok
   end,
 	{reply, Result, State};

@@ -23,7 +23,6 @@
          terminate/2, code_change/3]).
 
 -include("config.hrl").
--include("profile.hrl").
 
 -record(mediator, {config}).
   
@@ -43,16 +42,10 @@ start_link(Config) ->
   gen_server:start_link({local, mediator}, ?MODULE, Config, []).
 
 get(Key) -> 
-  ?prof(Key, mediator_call_get),
-  R = gen_server:call(mediator, {get, Key}),
-  ?prof(Key, mediator_call_get),
-  R.
+  gen_server:call(mediator, {get, Key}).
   
 put(Key, Context, Value) -> 
-  ?prof(Key, mediator_call_put),
-  R = gen_server:call(mediator, {put, Key, Context, Value}),
-  ?prof(Key, mediator_call_put),
-  R.    
+  gen_server:call(mediator, {put, Key, Context, Value}).    
   
 has_key(Key) -> 
   gen_server:call(mediator, {has_key, Key}).
@@ -176,7 +169,6 @@ internal_put(Key, Context, Value, #mediator{config=Config}) ->
   end.
   
 internal_get(Key, #mediator{config=Config}) ->
-  ?prof(Key, internal_get),
   {N,R,W} = unpack_config(Config),
   Servers = membership:nodes_for_key(Key),
   Part = membership:partition_for_key(Key),
@@ -187,13 +179,11 @@ internal_get(Key, #mediator{config=Config}) ->
   end,
   {Good, Bad} = pcall(MapFun, Servers, R),
   NotFound = resolve_not_found(Bad, R),
-  Response = if
-                 length(Good) >= R -> {ok, resolve_read(Good)};
-                 NotFound -> {ok, not_found};
-                 true -> {failure, error_message(Good, Bad, N, R)}
-             end,
-  ?prof(Key, internal_get),
-  Response.
+  if
+    length(Good) >= R -> {ok, resolve_read(Good)};
+    NotFound -> {ok, not_found};
+    true -> {failure, error_message(Good, Bad, N, R)}
+  end.
   
 internal_has_key(Key, #mediator{config=Config}) ->
   {N,R,W} = unpack_config(Config),

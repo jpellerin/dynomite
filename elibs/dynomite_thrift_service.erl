@@ -12,7 +12,6 @@
 
 -include("config.hrl").
 -include("dynomite_types.hrl").
--include("profile.hrl").
 
 %%%%% EXTERNAL INTERFACE %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -38,7 +37,6 @@ put(Key, ContextData, Data) when
   is_binary(Key),
   (ContextData =:= undefined orelse is_binary(ContextData)),
   is_binary(Data) ->
-    ?prof(Key, {start, put}),
     Context = if
                   ContextData =:= undefined -> [];
                   erlang:byte_size(ContextData) > 0 -> binary_to_term(ContextData);
@@ -48,12 +46,10 @@ put(Key, ContextData, Data) when
                    {ok, N} -> N;
                    {failure, Reason} -> throw(#failureException{message = iolist_to_binary(Reason)})
                end,
-    ?prof(Key, {'end', put}),
     Response.
                    
 
 get(Key) when is_binary(Key) ->
-    ?prof(Key, {start, get}),
     Response = case mediator:get(binary_to_list(Key)) of
                    {ok, not_found} -> #getResult{results = []};
                    {ok, {Context, Values}} ->
@@ -62,7 +58,6 @@ get(Key) when is_binary(Key) ->
                    {failure, Error} ->
                        throw(#failureException{message = iolist_to_binary(Error)})
                end,
-    ?prof(Key, {'end', get}),
     Response.
     
 

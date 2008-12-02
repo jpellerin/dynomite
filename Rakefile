@@ -23,8 +23,8 @@ task :native do
   ERLC_FLAGS = "+native #{ERLC_FLAGS}"
 end
 
-task :profile do
-  ERLC_FLAGS = "-DPROF #{ERLC_FLAGS}"
+task :debug do
+  ERLC_FLAGS ="-DDEBUG #{ERLC_FLAGS}"
 end
 
 task :run do

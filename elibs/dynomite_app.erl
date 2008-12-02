@@ -33,16 +33,16 @@
 %% @end 
 %%--------------------------------------------------------------------
 start(_Type, []) ->
-	Config = case application:get_env(jointo) of
-		{ok, NodeName} -> 
-		  error_logger:info_msg("attempting to contact ~w~n", [NodeName]),
-		  case net_adm:ping(NodeName) of
-  			pong -> process_arguments([directory, port, thrift_port], configuration:get_config(NodeName));
-  			pang -> {error, io_lib:format("Could not connect to ~p.  Exiting.~n", [NodeName])}
-  		end;
-		undefined -> process_arguments([r, w, n, q, directory, blocksize, port, storage_mod, thrift_port])
-	end,
-	Options = process_options([web_port]),
+  Config = case application:get_env(jointo) of
+	{ok, NodeName} -> 
+	   error_logger:info_msg("attempting to contact ~w~n", [NodeName]),
+	   case net_adm:ping(NodeName) of
+  		 pong -> process_arguments([directory, port, thrift_port], configuration:get_config(NodeName));
+  		 pang -> {error, io_lib:format("Could not connect to ~p.  Exiting.~n", [NodeName])}
+  	   end;
+	undefined -> process_arguments([r, w, n, q, directory, blocksize, port, storage_mod, thrift_port])
+  end,
+  Options = process_options([web_port]),
   case init:get_argument(profile) of
       error ->
           ok;
@@ -59,7 +59,7 @@ start(_Type, []) ->
 %% @end 
 %%--------------------------------------------------------------------
 stop({_, Sup}) ->
-    prof_stop(),
+  prof_stop(),
   exit(Sup, shutdown),
   ok.
 
