@@ -37,3 +37,70 @@ put avg: 52.9174800.3ms mean: 44.9030400.3ms 99.9: 192.3902030.3ms
 10 client(s) 1000 request(s) 2450.8665540.3s
 get avg: 69.8761190.3ms mean: 63.1911750.3ms 99.9: 479.4890880.3ms
 put avg: 175.2105370.3ms mean: 164.6809580.3ms 99.9: 581.4800260.3ms
+
+
+4 x 10 x 300, null storage
+
+gets: 11248 puts: 11248 collisions: 0
+get avg: 24.6835420.3ms median: 2.5188920.3ms 99.9: 235.6879710.3ms
+put avg: 30.9301050.3ms median: 7.8029630.3ms 99.9: 255.0349240.3ms
+
+gets: 11579 puts: 11579 collisions: 0
+get avg: 25.0566360.3ms median: 3.5700800.3ms 99.9: 226.4919280.3ms
+put avg: 33.0305070.3ms median: 8.1269740.3ms 99.9: 269.0911290.3ms
+
+
+
+4 x 10 x 300, couch storage
+
+gets: 10369 puts: 10369 collisions: 0
+get avg: 104.3878090.3ms median: 57.7960010.3ms 99.9: 420.2690120.3ms
+put avg: 123.4235350.3ms median: 82.6609130.3ms 99.9: 437.8299710.3ms
+
+
+4 x 10 x 300, couch storage, native
+
+gets: 9844 puts: 9844 collisions: 0
+get avg: 101.5120820.3ms median: 31.1710830.3ms 99.9: 546.7522140.3ms
+put avg: 121.4775550.3ms median: 62.1631150.3ms 99.9: 549.5018960.3ms
+
+
+4 x 10 x 300, dict storage
+
+gets: 10449 puts: 10449 collisions: 0
+get avg: 95.9851340.3ms median: 44.1510680.3ms 99.9: 435.3158470.3ms
+put avg: 105.6870590.3ms median: 64.7318360.3ms 99.9: 439.2538070.3ms
+
+4 x 10 x 300, dets storage
+
+gets: 10140 puts: 10140 collisions: 0
+get avg: 87.4485480.3ms median: 27.1880630.3ms 99.9: 379.3861870.3ms
+put avg: 99.5866170.3ms median: 40.2989390.3ms 99.9: 401.5259740.3ms
+
+
+4 x 10 x 300, fs storage
+
+gets: 9873 puts: 9873 collisions: 0
+get avg: 92.6405680.3ms median: 28.5089020.3ms 99.9: 426.8629550.3ms
+put avg: 119.9092360.3ms median: 67.6469800.3ms 99.9: 484.2360020.3ms
+
+
+4 x 10 x 300, mnesia storage, native
+
+gets: 10274 puts: 10274 collisions: 0
+get avg: 92.2162250.3ms median: 31.3360690.3ms 99.9: 529.8640730.3ms
+put avg: 104.4972280.3ms median: 52.9170040.3ms 99.9: 552.8559680.3ms
+
+
+4 x 10 x 300, mnesia storage
+
+gets: 10152 puts: 10152 collisions: 0
+get avg: 95.6529800.3ms median: 33.9150430.3ms 99.9: 439.4080640.3ms
+put avg: 109.1451080.3ms median: 59.6549510.3ms 99.9: 490.4549120.3ms
+
+
+10 x 4 x 300, mnesia storage
+
+gets: 11749 puts: 11749 collisions: 0
+get avg: 3.6935300.3ms median: 1.7809870.3ms 99.9: 127.9220580.3ms
+put avg: 4.5230410.3ms median: 2.0890240.3ms 99.9: 93.1501390.3ms
