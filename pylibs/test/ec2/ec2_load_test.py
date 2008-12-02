@@ -130,18 +130,36 @@ def evaluate_stats(conf, stats):
     p.sort()
     gets = len(g)
     puts = len(p)
+
+    get99 = g[int(gets * .999)-1] * 1000
+    put99 = p[int(puts * .999)-1] * 1000
+
     print "gets: %d puts: %d collisions: %d" \
           % (gets, puts, stats['collisions'])
     print "get avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(g) / float(gets)) * 1000,
         (g[gets/2]) * 1000,
-        (g[int(gets * .999)-1]) * 1000)
+        get99)
     print "put avg: %f0.3ms median: %f0.3ms 99.9: %f0.3ms" % (
         (sum(p) / float(puts)) * 1000,
         (p[puts/2]) * 1000,
-        (p[int(puts * .999)-1]) * 1000)
-    # FIXME check assertions
+        put99)
 
+    print "gets:"
+    for pct in (10, 20, 30, 40, 50, 60, 70, 80, 90, 100):
+        gp = g[int(gets * float(pct)/100.0)-1] * 1000
+        print " %3d%% < %7.3fms" % (pct, gp)
+
+    print "puts:"
+    for pct in (10, 20, 30, 40, 50, 60, 70, 80, 90, 100):
+        pp = g[int(puts * float(pct)/100.0)-1] * 1000
+        print " %3d%% < %7.3fms" % (pct, pp)
+    
+    assert get99 <= conf.get_threshold, "Get timings too slow (%s > %s)" % (
+        get99, conf.get_threshold)
+    assert put99 <= conf.put_threshold, "Put timings too slow (%s > %s)" % (
+        put99, conf.put_threshold)
+    
 
 def wait_for_instances(conf, ec2):
     ready = {}
