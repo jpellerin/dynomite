@@ -114,6 +114,7 @@ def collect_stats(conf, ec2):
             print "failed to collect stats from %s: %s/%s" % (instance,
                                                               out, err)
             continue
+        print "Collected"
         sf = open(stats_file, 'r')
         batch = pickle.load(sf)
         sf.close()
@@ -152,7 +153,7 @@ def evaluate_stats(conf, stats):
 
     print "puts:"
     for pct in (10, 20, 30, 40, 50, 60, 70, 80, 90, 100):
-        pp = g[int(puts * float(pct)/100.0)-1] * 1000
+        pp = p[int(puts * float(pct)/100.0)-1] * 1000
         print " %3d%% < %7.3fms" % (pct, pp)
     
     assert get99 <= conf.get_threshold, "Get timings too slow (%s > %s)" % (
@@ -168,6 +169,7 @@ def wait_for_instances(conf, ec2):
         pending = []
         running = {}
         for i in ec2.instances:
+            print i, i.state
             if i.state == 'pending':
                 i.update()
             if i.state == 'pending':
@@ -176,6 +178,7 @@ def wait_for_instances(conf, ec2):
                 running[i.id] = i
             else:
                 print "Unexpected state for instance %s: %s" % (i, i.state)
+                pending.append(i)
         if conf.separate_client:
             print "Waiting for instance startup: " \
                   "%s pending %s running %s ready %s client ready" \
