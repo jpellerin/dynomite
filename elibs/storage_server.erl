@@ -1,6 +1,6 @@
 %%%-------------------------------------------------------------------
 %%% File:      storage_server.erl
-%%% @author    Cliff Moon <> []
+%%% @author    Cliff Moon <cliff@powerset.com> []
 %%% @copyright 2008 Cliff Moon
 %%% @doc  
 %%%
@@ -9,7 +9,7 @@
 %%% @since 2008-04-02 by Cliff Moon
 %%%-------------------------------------------------------------------
 -module(storage_server).
--author('Cliff Moon').
+-author('cliff@powerset.com').
 
 -behaviour(gen_server).
 
@@ -135,8 +135,8 @@ init({StorageModule,DbKey,Name,Min,Max,BlockSize}) ->
     {ok, Table} = StorageModule:open(DbKey,Name),
     %% ?debugFmt("storage table ~p", [Table]),
     
-    Tree = if
-      BlockSize == undefined -> undefined;
+    {ok, Tree} = if
+      BlockSize == undefined -> {ok, undefined};
       true -> dmerkle:open(lists:concat([DbKey, "/dmerkle"]), BlockSize)
     end,
     %% ?debugFmt("dmerkle tree ~p", [Tree]),
@@ -186,7 +186,10 @@ handle_call({has_key, Key}, _From, State = #storage{module=Module,table=Table}) 
 	{reply, catch Module:has_key(sanitize_key(Key),Table), State};
 	
 handle_call({delete, Key}, _From, State = #storage{module=Module,table=Table,tree=Tree}) ->
-  UpdatedTree = dmerkle:delete(Key, Tree),
+  UpdatedTree = if
+    Tree == undefined -> undefined;
+    true -> dmerkle:delete(Key, Tree)
+  end,
   case catch Module:delete(sanitize_key(Key), Table) of
     {ok, ModifiedTable} -> 
       {reply, ok, State#storage{table=ModifiedTable,tree=Tree}};
@@ -223,7 +226,7 @@ handle_call({swap_tree, NewDmerkle}, _From, State = #storage{tree=Dmerkle}) ->
 handle_call(rebuild_tree, {FromPid, _Tag}, State = #storage{dbkey=DbKey,table=Table,blocksize=BlockSize,module=Module}) ->
   Parent = self(),
   spawn(fun() -> 
-      NewDmerkle = dmerkle:open(lists:concat([DbKey, "/dmerkle_new"]), BlockSize),
+      {ok, NewDmerkle} = dmerkle:open(lists:concat([DbKey, "/dmerkle_new"]), BlockSize),
       FoldFun = fun({Key, Context, Value}, Dmerkle) ->
         dmerkle:update(Key, Value, Dmerkle)
       end,
